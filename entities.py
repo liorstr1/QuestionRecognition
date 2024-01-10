@@ -1,7 +1,11 @@
+import os
 from enum import Enum
+from dotenv import load_dotenv
+load_dotenv()
 
-SERVICE_SETUP = 'C:/chromedriver.exe'
+SERVICE_SETUP = os.getenv('CHROME_DRIVER_PATH')
 WHATSAPP_WEB = 'https://web.whatsapp.com'
+CLIENT_PATH = os.getenv('CLIENT_FOLDER_PATH')
 
 
 class MainStatus(Enum):
@@ -73,13 +77,13 @@ class Status:
 
 
 class UserData:
-    def __init__(self, name, user_id):
-        self.user_name: str = name
+    def __init__(self, user_name, user_id):
+        self.user_name: str = user_name
         self.user_id: str = user_id
         self.next_data_dict: dict = {}
 
 
 class ClientData:
     def __init__(self, client_name, client_id):
-        self.client_name: str = name
+        self.client_name: str = client_name
         self.client_id: str = client_id

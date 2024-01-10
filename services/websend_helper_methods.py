@@ -1,26 +1,25 @@
 import json
 import os
 import time
-from datetime import datetime
 from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
-from entities import SERVICE_SETUP, Status, WHATSAPP_WEB, UserData, ClientData
-from selenium.webdriver.chrome.service import Service
-from selenium import webdriver
+from entities import Status, WHATSAPP_WEB, UserData, ClientData, CLIENT_PATH
 from selenium.webdriver.support import expected_conditions as ec
-
+from selenium import webdriver
 from services.prompts_and_texts import INIT_JSON_STRUCT
+from selenium.webdriver.chrome.options import Options
 
 
 def init_data(user_name):
-    print('Hey Elior, I\'m on = ', datetime.now().strftime("%H:%M:%S"))
+    chrome_options = Options()
+    # Now, pass chrome_options when initializing the driver
+    driver = webdriver.Chrome(options=chrome_options)
     # WebDriver setup
-    s = Service(SERVICE_SETUP)
-    driver = webdriver.Chrome(service=s)
+    # s = Service(SERVICE_SETUP)
     status = Status()
     user_data = UserData(
-        name=user_name,
+        user_name=user_name,
         user_id=1
     )
     client_data = ClientData(
@@ -41,8 +40,10 @@ def init_data(user_name):
     return driver, status, user_data, client_data
 
 
-def check_latest_message(latest_message, last_incoming_message):
-    if 'message-in' in latest_message.get_attribute('class') and latest_message != last_incoming_message:
+def check_latest_message(latest_message, user_messages):
+    if 'message-in' in latest_message.get_attribute('class') and not user_messages:
+        return True
+    if 'message-in' in latest_message.get_attribute('class') and latest_message != user_messages[-1]:
         return True
     return False
 
@@ -55,19 +56,25 @@ def analyze_new_message(latest_message):
 
 
 def get_updated_json(client_data: ClientData, user_data: UserData):
-    json_path = './jsons/'
-    if not os.path.exists(json_path):
-        os.makedirs(json_path)
-    client_path = os.path.join(json_path, client_data.client_id)
+    main_client_path = CLIENT_PATH
+    if not os.path.exists(main_client_path):
+        os.makedirs(main_client_path)
+    client_path = os.path.join(main_client_path, str(client_data.client_id))
     if not os.path.exists(client_path):
         os.makedirs(client_path)
-    user_path = os.path.join(client_path, user_data.user_id)
+    user_path = os.path.join(client_path, str(user_data.user_id))
     if not os.path.exists(user_path):
         os.makedirs(user_path)
     json_path = os.path.join(user_path, "my_question_path.json")
-    with open(json_path, 'r') as f:
-        json.dump(INIT_JSON_STRUCT, f)
-    return json_path, json.loads(INIT_JSON_STRUCT)
+
+    if not os.path.exists(json_path):
+        with open(json_path, 'w', encoding='utf-8') as f:
+            f.write(INIT_JSON_STRUCT)
+
+    with open(json_path, 'r', encoding='utf-8') as f:
+        json_data = json.load(f)
+
+    return json_path, json_data
 
 
 def check_json_struct(json_struct):

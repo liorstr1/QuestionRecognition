@@ -1,16 +1,14 @@
+import json
+
 INITIAL_CONTACT = """
 "היי אני פונה אליך בעקבות מודעה שראיתי, בה אתה מנסה למכור את הדירה שלך, הייתי רוצה לעזור לך לקדם את העניין, מעוניין לשמוע?"
 """
+START_ASK_QUESTIONS = """
+מעולה, אשמח לשאול אותך כמה שאלות
+"""
 
-
-INIT_JSON_STRUCT = """
-{
-    "{question1}": None,
-    "{question2}": None,
-    "{question3}": None    
-}
-""".format(
-    question1='כמה זמן הנכס עומד למכירה',
-    question2='כמה אנשים ראו את הנכס',
-    question3='האם אתה מרוצה מההצעות מחיר שקיבלת'
-)
+INIT_JSON_STRUCT = json.dumps({
+    'כמה זמן הנכס עומד למכירה': None,
+    'כמה אנשים ראו את הנכס': None,
+    'האם אתה מרוצה מההצעות מחיר שקיבלת': None
+}, ensure_ascii=False, indent=4)
