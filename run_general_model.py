@@ -132,14 +132,15 @@ def cross_validate_and_save_model(model_name, model_full_name, docs, labels, sav
     return np.mean(f1_scores)
 
 
-def predict_with_confidence(model_name, model_full_name, docs, saved_model_path):
+def predict_with_confidence(model_name, model_full_name, docs, saved_model_path, model):
     # Load the model from the saved path
-    model_path = f'{saved_model_path}/{model_name}.bin'
-    with open(model_path, 'rb') as file:
-        model = pickle.load(file)
+    if model is None:
+        model_path = f'{saved_model_path}/{model_name}.bin'
+        with open(model_path, 'rb') as file:
+            model = pickle.load(file)
 
-    # Ensure the model is in evaluation mode
-    model.eval()
+        # Ensure the model is in evaluation mode
+        model.eval()
 
     # Tokenize the documents
     tokenizer = AutoTokenizer.from_pretrained(model_full_name)

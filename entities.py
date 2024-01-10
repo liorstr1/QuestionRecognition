@@ -6,6 +6,10 @@ load_dotenv()
 SERVICE_SETUP = os.getenv('CHROME_DRIVER_PATH')
 WHATSAPP_WEB = 'https://web.whatsapp.com'
 CLIENT_PATH = os.getenv('CLIENT_FOLDER_PATH')
+STELLA_MODEL_PATH = os.path.join(os.getenv('MODELS_PATH'), 'stella.bin')
+ANSWER_PATH = os.getenv('ANSWER_PATH')
+
+MIN_CONFIDENCE = 0.9
 
 
 class MainStatus(Enum):

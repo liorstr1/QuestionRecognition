@@ -1,10 +1,15 @@
 from selenium.common.exceptions import NoSuchElementException
 from chat_with_gpt.main_gpt_process import ChatWithGPT
-from services.api import analyze_init_user_answer, update_json_struct
-from services.prompts_and_texts import INITIAL_CONTACT, START_ASK_QUESTIONS
+from entities import STELLA_MODEL_PATH, MIN_CONFIDENCE, ANSWER_PATH
+from helper_methods import get_label2answer
+from main_processes import prediction_process
+from services.prompts_and_texts import DO_YOU_HAVE_QUESTION
 from services.websend_helper_methods import *
 
 IS_CALL_API_FLAG = False  # Global flag
+STELLA_MODEL = init_stella_model(STELLA_MODEL_PATH)
+LABEL2ANSWER = get_label2answer(ANSWER_PATH)
+CWG = ChatWithGPT()
 
 
 def run_main_process():
@@ -113,32 +118,53 @@ def call_api(driver, message_content, status: Status, user_data, client_data, us
     if status.is_init_answer():
         analyze_init_user_answer(message_content, status)
     if status.is_fill_json():
-        # send_outgoing_message(driver, START_ASK_QUESTIONS)
-        json_path, json_struct = get_updated_json(client_data, user_data)
-        cwg = ChatWithGPT()
-        # start to fill json with chatGPT
-        while check_json_struct(json_struct):
-            print("next question")
-            next_question = get_next_question(json_struct)
-            check_next, next_message, messages = cwg.fill_init_message_with_struct_json(next_question)
-            while not check_next:
-                # send user gpt message
-                send_outgoing_message(driver, next_message)
-                status.update_gpt_sent()
-                IS_CALL_API_FLAG = False
-
-                # wait the user to answer
-                incoming_message = continuously_check_for_new_messages(driver, user_messages)
-                if incoming_message:
-                    check_next, next_message, messages = cwg.analyze_next_user_answer(
-                        messages,
-                        incoming_message
-                    )
-                    print(next_message)
-                    if check_next:
-                        update_json_struct(json_path, json_struct, next_question, next_message)
-            status.update_gpt_got()
+        run_gpt_process(client_data, user_data, driver, status, user_messages)
         status.update_finish_gpt()
+    if status.main_status.USER_TURN_TO_ASK:
+        let_the_user_ask_questions(driver, status, user_messages)
+
+
+def let_the_user_ask_questions(driver, status, user_messages):
+    global IS_CALL_API_FLAG
+    send_outgoing_message(driver, DO_YOU_HAVE_QUESTION)
+    while True:
+        IS_CALL_API_FLAG = False
+
+        # wait the user to answer
+        incoming_message = continuously_check_for_new_messages(driver, user_messages)
+        if incoming_message:
+            prediction_results = prediction_process([incoming_message], None, STELLA_MODEL)
+            if prediction_results[incoming_message][1] >= MIN_CONFIDENCE:
+                answer = LABEL2ANSWER[prediction_results[incoming_message][0]]
+                send_outgoing_message(driver, answer)
+
+
+def run_gpt_process(client_data, user_data, driver, status, user_messages):
+    global IS_CALL_API_FLAG
+    # send_outgoing_message(driver, START_ASK_QUESTIONS)
+    json_path, json_struct = get_updated_json(client_data, user_data)
+    # start to fill json with chatGPT
+    while check_json_struct(json_struct):
+        print("next question")
+        next_question = get_next_question(json_struct)
+        check_next, next_message, messages = CWG.fill_init_message_with_struct_json(next_question)
+        while not check_next:
+            # send user gpt message
+            send_outgoing_message(driver, next_message)
+            status.update_gpt_sent()
+            IS_CALL_API_FLAG = False
+
+            # wait the user to answer
+            incoming_message = continuously_check_for_new_messages(driver, user_messages)
+            if incoming_message:
+                check_next, next_message, messages = CWG.analyze_next_user_answer(
+                    messages,
+                    incoming_message
+                )
+                print(next_message)
+                if check_next:
+                    update_json_struct(json_path, json_struct, next_question, next_message)
+        status.update_gpt_got()
 
 
 if __name__ == "__main__":

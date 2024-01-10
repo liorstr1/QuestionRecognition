@@ -52,7 +52,7 @@ def train_model_process(question_path, saved_model_path, override=False):
     cross_validate_and_save_model(MODEL_NAME, MODEL_FULL_NAME, X, y, saved_model_path, n_splits=5)
 
 
-def prediction_process(docs_to_predict, saved_model_path):
+def prediction_process(docs_to_predict, saved_model_path, model=None):
     heb_doc2docs = translate_and_enrich(docs_to_predict)
     final_docs_to_predict, indices_dict = get_docs_and_indices(heb_doc2docs)
 
@@ -60,9 +60,9 @@ def prediction_process(docs_to_predict, saved_model_path):
         MODEL_NAME,
         MODEL_FULL_NAME,
         final_docs_to_predict,
-        saved_model_path
+        saved_model_path,
+        model
     )
-
     opt_labels = list(all_confidence_scores[0].keys())
     return calculate_results(indices_dict, all_confidence_scores, opt_labels)
 

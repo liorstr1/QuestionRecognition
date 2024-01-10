@@ -39,5 +39,5 @@ def gpt_function():
 
 
 if __name__ == '__main__':
-    # model_functions()
-    gpt_function()
+    model_functions()
+    #gpt_function()

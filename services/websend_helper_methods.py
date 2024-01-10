@@ -1,13 +1,16 @@
 import json
 import os
+import pickle
 import time
 from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
+
+from chat_with_gpt.main_gpt_process import ChatWithGPT
 from entities import Status, WHATSAPP_WEB, UserData, ClientData, CLIENT_PATH
 from selenium.webdriver.support import expected_conditions as ec
 from selenium import webdriver
-from services.prompts_and_texts import INIT_JSON_STRUCT
+from services.prompts_and_texts import INIT_JSON_STRUCT, INITIAL_CONTACT
 from selenium.webdriver.chrome.options import Options
 
 
@@ -85,6 +88,36 @@ def check_json_struct(json_struct):
 
 def get_next_question(json_struct):
     return [k for k, v in json_struct.items() if v is None][0]
+
+
+def init_stella_model(model_path):
+    with open(model_path, 'rb') as file:
+        model = pickle.load(file)
+
+    # Ensure the model is in evaluation mode
+    model.eval()
+    return model
+
+
+def analyze_init_user_answer(user_answer, status: Status):
+    cwg = ChatWithGPT()
+    response = cwg.analyze_first_message(INITIAL_CONTACT, user_answer)
+    print(f'user picked to:{response}')
+    if response == 'continue' or response == 'unclear':
+        status.init_continue()
+    elif response == 'stop':
+        status.end_session()
+    else:
+        # TODO: add option for postpone/unclear
+        status.end_session()
+
+
+def update_json_struct(json_path, json_struct, next_question, next_message):
+    json_struct[next_question] = next_message
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(json_struct, f, ensure_ascii=False, indent=4)
+
+
 
 
 
