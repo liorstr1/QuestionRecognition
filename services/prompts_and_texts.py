@@ -7,8 +7,10 @@ START_ASK_QUESTIONS = """
 מעולה, אשמח לשאול אותך כמה שאלות
 """
 
-INIT_JSON_STRUCT = json.dumps({
-    'כמה זמן הנכס עומד למכירה': None,
-    'כמה אנשים ראו את הנכס': None,
-    'האם אתה מרוצה מההצעות מחיר שקיבלת': None
-}, ensure_ascii=False, indent=4)
+INIT_JSON_STRUCT = json.dumps(
+    {
+        'כמה זמן הנכס עומד למכירה': None,
+        'כמה אנשים ראו את הנכס': None,
+        'האם אתה מרוצה מההצעות מחיר שקיבלת': None
+    }
+    , ensure_ascii=False, indent=4)

@@ -77,6 +77,7 @@ def continuously_check_for_new_messages(driver, user_messages):
                 user_messages.append(latest_message)
                 message_content = analyze_new_message(latest_message)
                 time.sleep(2)
+                IS_CALL_API_FLAG = True
                 return message_content
 
 
@@ -112,66 +113,33 @@ def call_api(driver, message_content, status: Status, user_data, client_data, us
     if status.is_init_answer():
         analyze_init_user_answer(message_content, status)
     if status.is_fill_json():
-        send_outgoing_message(driver, START_ASK_QUESTIONS)
+        # send_outgoing_message(driver, START_ASK_QUESTIONS)
         json_path, json_struct = get_updated_json(client_data, user_data)
         cwg = ChatWithGPT()
         # start to fill json with chatGPT
         while check_json_struct(json_struct):
+            print("next question")
             next_question = get_next_question(json_struct)
             check_next, next_message, messages = cwg.fill_init_message_with_struct_json(next_question)
             while not check_next:
-                IS_CALL_API_FLAG = False
                 # send user gpt message
                 send_outgoing_message(driver, next_message)
                 status.update_gpt_sent()
+                IS_CALL_API_FLAG = False
 
                 # wait the user to answer
-                while status.keep_running:
-                    incoming_message = continuously_check_for_new_messages(driver, user_messages)
-                    if incoming_message:
-                        check_next, next_message, messages = cwg.analyze_next_user_answer(
-                            messages,
-                            incoming_message
-                        )
-                        status.update_gpt_got()
-            update_json_struct(json_path, json_struct, next_question, next_message)
-        status.update_finish_gpt()
-
-
-def test_gpt():
-    user_data = UserData(
-        user_name="אליאור שמש",
-        user_id=1
-    )
-    client_data = ClientData(
-        client_name="david",
-        client_id=1
-    )
-
-    json_path, json_struct = get_updated_json(client_data, user_data)
-    cwg = ChatWithGPT()
-    # start to fill json with chatGPT
-    while check_json_struct(json_struct):
-        next_question = get_next_question(json_struct)
-        check_next, next_message, messages = cwg.fill_init_message_with_struct_json(next_question)
-        while not check_next:
-            # send user gpt message
-            send_outgoing_message(driver, INITIAL_CONTACT)
-            status.update_gpt_sent()
-
-            # wait the user to answer
-            while status.keep_running:
                 incoming_message = continuously_check_for_new_messages(driver, user_messages)
                 if incoming_message:
                     check_next, next_message, messages = cwg.analyze_next_user_answer(
                         messages,
                         incoming_message
                     )
-                    status.update_gpt_got()
-        update_json_struct(json_path, json_struct, next_question, next_message)
-    status.update_finish_gpt()
+                    print(next_message)
+                    if check_next:
+                        update_json_struct(json_path, json_struct, next_question, next_message)
+            status.update_gpt_got()
+        status.update_finish_gpt()
 
 
 if __name__ == "__main__":
-    #test_gpt()
     run_main_process()

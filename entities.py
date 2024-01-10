@@ -70,6 +70,7 @@ class Status:
     def update_gpt_got(self):
         self.main_status = MainStatus.MY_TURN_TO_ASK
         self.secondary_status = SecondaryStatus.FILL_JSON
+        self.keep_running = False
 
     def update_finish_gpt(self):
         self.main_status = MainStatus.USER_TURN_TO_ASK

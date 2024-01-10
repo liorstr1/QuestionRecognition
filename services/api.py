@@ -20,5 +20,5 @@ def analyze_init_user_answer(user_answer, status: Status):
 
 def update_json_struct(json_path, json_struct, next_question, next_message):
     json_struct[next_question] = next_message
-    with open(json_path, 'w') as f:
-        json.dump(json_struct, f)
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(json_struct, f, ensure_ascii=False, indent=4)

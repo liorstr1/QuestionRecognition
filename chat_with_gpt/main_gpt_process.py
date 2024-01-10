@@ -55,6 +55,7 @@ class ChatWithGPT:
         return False,  res['next'], messages
 
     def analyze_next_user_answer(self, messages, user_answer):
+        print(user_answer)
         messages.append(
             {
                 'role': "user",
