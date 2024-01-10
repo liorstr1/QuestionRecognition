@@ -1,7 +1,8 @@
 from selenium.common.exceptions import NoSuchElementException
 import openai
 
-from services.api import analyze_init_user_answer
+from chat_with_gpt.main_gpt_process import ChatWithGPT
+from services.api import analyze_init_user_answer, update_json_struct
 from services.prompts_and_texts import INITIAL_CONTACT
 from services.websend_helper_methods import *
 
@@ -9,19 +10,17 @@ IS_CALL_API_FLAG = False  # Global flag
 
 
 def run_main_process():
-    driver, status, last_incoming_message, user_data, client_data = init_data(
+    driver, status, user_data, client_data = init_data(
         user_name='ליאור שטראוס'
     )
-    last_incoming_message = process_existing_messages(driver)
     send_outgoing_message(driver, INITIAL_CONTACT)
     status.update_init_asked()
 
     # Main loop to continuously check for new messages and respond
     while status.keep_running:
-        incoming_message_content = continuously_check_for_new_messages(driver, last_incoming_message)
-        if incoming_message_content:
-            call_api(driver, incoming_message_content, status, user_data, client_data)
-            last_incoming_message = incoming_message_content  # Update the last message content
+        incoming_message = continuously_check_for_new_messages(driver)
+        if incoming_message:
+            call_api(driver, incoming_message, status, user_data, client_data)
     driver.quit()
 
 
@@ -30,11 +29,11 @@ def process_existing_messages(driver):
     # Locate all messages in the chat
     messages = driver.find_elements(By.XPATH, "//div[contains(@class, '_1AOLJ _2UtSC _1jHIY')]")
 
-    last_incoming_message = None
+    last_incoming = None
     for message in messages:
         # Determine if the message is incoming or outgoing
         if 'message-in' in message.get_attribute('class'):
-            last_incoming_message = message  # Update last incoming message
+            last_incoming = message  # Update last incoming message
 
         # Check for voice message
         voice_message_elements = message.find_elements(By.XPATH,
@@ -55,17 +54,14 @@ def process_existing_messages(driver):
                 message_content = "Non-text message (e.g., image, video, etc.)"
 
         print(
-            f"Type: {'incoming' if last_incoming_message == message else 'outgoing'}, Timestamp: {timestamp}, "
+            f"Type: {'incoming' if last_incoming == message else 'outgoing'}, Timestamp: {timestamp}, "
             f"Message: {message_content}")
 
-    # Optionally send an initial message (if this function is implemented)
-    # send_initial_message(driver)
-
-    # Return the last incoming message element for further processing
-    return last_incoming_message
+    return last_incoming
 
 
-def continuously_check_for_new_messages(driver, last_incoming_message):
+def continuously_check_for_new_messages(driver):
+    last_incoming_message = process_existing_messages(driver)
     global IS_CALL_API_FLAG
     while True:
         if IS_CALL_API_FLAG:
@@ -118,97 +114,26 @@ def call_api(driver, message_content, status: Status, user_data, client_data):
         analyze_init_user_answer(message_content, status)
     if status.is_fill_json():
         json_path, json_struct = get_updated_json(client_data, user_data)
+        cwg = ChatWithGPT()
         while check_json_struct(json_struct):
             next_question = get_next_question(json_struct)
-            fill_next_question_using_gpt(next_question)
+            check_next, next_message, messages = cwg.fill_init_message_with_struct_json(next_question)
+            while not check_next:
+                # send user gpt message
+                send_outgoing_message(driver, INITIAL_CONTACT)
+                status.update_gpt_sent()
 
-
-
-
-    def get_openai_response(conversation):
-        print("start GPT")
-        client = openai.OpenAI(api_key='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')
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=conversation
-        )
-        return response.choices[0].message.content
-
-    # Prepare the conversation history and add the initial system message
-    conversation_history = [{"role": "system", "content": "System initialization message"}]
-
-    # Add the incoming user message to the conversation history
-    conversation_history.append({"role": "user", "content": message_content})
-
-    # Get the response from OpenAI
-    gpt_response = get_openai_response(conversation_history)
-
-    # Set the flag to False to resume message checking
-    is_call_api_active = False
-
-    def is_response_related(question, response):
-        print("start GPT2")
-        response = response.strip()
-        if "אתה יכול לספר לי על הנכס שלך מעט ?" in question:
-            return len(response.split()) > 5
-        elif "מה התקציב שלך לנכס?" in question:
-            return any(char.isdigit() for char in response)
-        elif "האם אתה גמיש בתקציב שלך לנכס?" in question:
-            return response in ["כן", "לא", "אולי"]
-        else:
-            return False
-
-    form_questions = [
-        "אתה יכול לספר לי על הנכס שלך מעט ?",
-        "מה התקציב שלך לנכס?",
-        "האם אתה גמיש בתקציב שלך לנכס?"
-    ]
-
-    form_responses = {}
-    conversation_history = [{"role": "system",
-                             "content": "אתה מייצג סוכן נדלן ואתה אמור לשכנע את הלקוח להשתמש בשירותים שלך בצורה מכירתית. התשובות שלך צריכות להיות קצרות ומדוייקות בהתאם לשאלות הלקוח. עלייך לקדם את השיחה בהתאם. "}]
-    current_question_index = 0
-    gpt_response_count = 0
-    print("the message for GPT is: ", message_content)
-
-    while current_question_index < len(form_questions):
-        user_input = message_content
-        conversation_history.append({"role": "user", "content": user_input})
-
-        if current_question_index not in form_responses and not is_response_related(
-                form_questions[current_question_index], user_input):
-            if gpt_response_count < 2:
-                gpt_response = get_openai_response(conversation_history)
-                conversation_history.append({"role": "assistant", "content": gpt_response})
-                print(gpt_response)
-                gpt_response_count += 1
-                break
-            else:
-                question = form_questions[current_question_index]
-                print(question)
-                conversation_history.append({"role": "assistant", "content": question})
-                gpt_response_count = 0
-                break
-
-        else:
-            form_responses[current_question_index] = user_input
-            current_question_index += 1
-            gpt_response_count = 0
-            break
-
-    print("\nResponses:")
-    for i, response in form_responses.items():
-        print(f"{form_questions[i]} {response}")
-
-    # Send the last response received from the conversation history
-    if conversation_history:
-        last_response = conversation_history[-1].get("content")
-        if last_response:
-            send_response(driver, last_response)
-
-    is_call_api_active = False  # Reset flag when done
-    last_incoming_message = gpt_response
-    continuously_check_for_new_messages(driver, last_incoming_message)
+                # wait the user to answer
+                while status.keep_running:
+                    incoming_message = continuously_check_for_new_messages(driver)
+                    if incoming_message:
+                        check_next, next_message, messages = cwg.analyze_next_user_answer(
+                            messages,
+                            incoming_message
+                        )
+                        status.update_gpt_got()
+            update_json_struct(json_path, json_struct, next_question, next_message)
+        status.update_finish_gpt()
 
 
 if __name__ == "__main__":

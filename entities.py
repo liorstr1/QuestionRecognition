@@ -59,6 +59,18 @@ class Status:
             return True
         return False
 
+    def update_gpt_sent(self):
+        self.main_status = MainStatus.USER_TURN_TO_ANSWER
+        self.secondary_status = SecondaryStatus.FILL_JSON
+
+    def update_gpt_got(self):
+        self.main_status = MainStatus.MY_TURN_TO_ASK
+        self.secondary_status = SecondaryStatus.FILL_JSON
+
+    def update_finish_gpt(self):
+        self.main_status = MainStatus.USER_TURN_TO_ASK
+        self.secondary_status = SecondaryStatus.USER_TURN_TO_ASK
+
 
 class UserData:
     def __init__(self, name, user_id):
