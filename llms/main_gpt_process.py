@@ -1,7 +1,7 @@
 import json
 import os
 import openai
-from chat_with_gpt.prompts import INIT_MESSAGE_PROMPT, INIT_TEXT_PROMPTS, INTERVIEWER_PROMPT
+from llms.prompts import INIT_MESSAGE_PROMPT, INIT_TEXT_PROMPTS, INTERVIEWER_PROMPT
 
 
 class ChatWithGPT:

@@ -1,16 +1,26 @@
 from datetime import datetime
 from torch.nn.functional import softmax
 import numpy as np
-import torch
-from sklearn.metrics import f1_score
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
-from sklearn.model_selection import StratifiedKFold
+from transformers import (
+    AutoModelForSequenceClassification, AutoTokenizer, DistilBertForSequenceClassification, Trainer, TrainingArguments,
+    EvalPrediction
+)
+from torch.optim import AdamW
 import pickle
+import torch
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import f1_score
+import torch.nn.functional as F
+
+# Distillation parameters
+temperature = 2.0  # Can be tuned
+
 
 training_args = TrainingArguments(
         output_dir='./results',        # Output directory for model checkpoints
         num_train_epochs=10,            # Number of training epochs
-        per_device_train_batch_size=2,# Batch size for training
+        per_device_train_batch_size=2, # Batch size for training
         per_device_eval_batch_size=4,  # Batch size for evaluation
         warmup_steps=100,              # Number of warmup steps
         weight_decay=0.01,             # Weight decay for optimization
@@ -132,10 +142,9 @@ def cross_validate_and_save_model(model_name, model_full_name, docs, labels, sav
     return np.mean(f1_scores)
 
 
-def predict_with_confidence(model_name, model_full_name, docs, saved_model_path, model):
+def predict_with_confidence(model_path, model_full_name, docs, model):
     # Load the model from the saved path
     if model is None:
-        model_path = f'{saved_model_path}/{model_name}.bin'
         with open(model_path, 'rb') as file:
             model = pickle.load(file)
 
@@ -186,3 +195,102 @@ class DatasetModel(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.labels)
+
+
+def cross_validate_and_save_student_model(docs, labels, teacher_model_path, student_model_path, n_splits=5):
+    with open(teacher_model_path, 'rb') as file:
+        teacher_model = pickle.load(file)
+    teacher_model.eval()
+
+    student_model = DistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=len(set(labels)))
+
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True)
+    X, y = np.array(docs), np.array(labels)
+    f1_scores = []
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    student_model.to(device)
+    teacher_model.to(device)
+
+    local_training_args = TrainingArguments(
+        output_dir='./results',         # Output directory for model checkpoints
+        num_train_epochs=3,             # Number of training epochs
+        per_device_train_batch_size=16, # Batch size for training
+        per_device_eval_batch_size=32,  # Batch size for evaluation
+        warmup_steps=500,               # Number of warmup steps
+        weight_decay=0.01,              # Weight decay for optimization
+        logging_dir='./logs',           # Directory for storing logs
+        logging_steps=10,               # Log every x updates steps
+        evaluation_strategy="steps"
+    )
+
+    optimizer = AdamW(student_model.parameters(), lr=5e-5)
+
+    for fold, (train_index, val_index) in enumerate(skf.split(X, y)):
+        X_train, X_val = X[train_index].tolist(), X[val_index].tolist()
+        y_train, y_val = y[train_index], y[val_index]
+
+        tokenizer = AutoTokenizer.from_pretrained('distilbert-base-uncased')
+        train_encodings = tokenizer(X_train, truncation=True, padding=True, return_tensors="pt")
+        val_encodings = tokenizer(X_val, truncation=True, padding=True, return_tensors="pt")
+
+        train_dataset = TensorDataset(train_encodings['input_ids'], train_encodings['attention_mask'], torch.tensor(y_train))
+        val_dataset = TensorDataset(val_encodings['input_ids'], val_encodings['attention_mask'], torch.tensor(y_val))
+
+        for epoch in range(local_training_args.num_train_epochs):
+            student_model.train()
+            for batch in DataLoader(train_dataset, batch_size=training_args.per_device_train_batch_size):
+                input_ids, attention_mask, labels = [b.to(device) for b in batch]
+
+                # Get teacher predictions
+                with torch.no_grad():
+                    teacher_outputs = teacher_model(input_ids, attention_mask=attention_mask)
+                    teacher_predictions = F.softmax(teacher_outputs.logits / temperature, dim=-1)
+
+                # Student forward pass
+                student_outputs = student_model(input_ids, attention_mask=attention_mask)
+                student_predictions = student_outputs.logits
+
+                # Calculate distillation loss
+                distillation_loss = F.kl_div(
+                    F.log_softmax(student_predictions / temperature, dim=-1),
+                    teacher_predictions,
+                    reduction='batchmean'
+                ) * (temperature ** 2)
+
+                # Calculate standard classification loss
+                labels = labels.long()
+                classification_loss = F.cross_entropy(student_predictions, labels)
+
+                # Combine losses
+                loss = distillation_loss + classification_loss
+
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(student_model.parameters(), 1.0)
+                optimizer.step()
+                optimizer.zero_grad()
+
+            # Evaluate model after each epoch
+            student_model.eval()
+            eval_predictions = []
+            eval_labels = []
+            for batch in DataLoader(val_dataset, batch_size=local_training_args.per_device_eval_batch_size):
+                input_ids, attention_mask, labels = [b.to(device) for b in batch]
+
+                with torch.no_grad():
+                    outputs = student_model(input_ids, attention_mask=attention_mask)
+                    logits = outputs.logits
+                    eval_predictions.extend(torch.argmax(logits, dim=-1).cpu().numpy())
+                    eval_labels.extend(labels.cpu().numpy())
+
+            # Compute F1 score
+            if eval_predictions and eval_labels:
+                f1 = f1_score(eval_labels, eval_predictions, average='weighted')
+                f1_scores.append(f1)
+                print(f"Fold {fold + 1}, Epoch {epoch + 1}: F1 Score - {f1}")
+
+        # Save model after the last fold
+        if fold == n_splits - 1:
+            student_model.save_pretrained(student_model_path)
+            tokenizer.save_pretrained(student_model_path)
+
+    return np.mean(f1_scores)

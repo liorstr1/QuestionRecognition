@@ -7,7 +7,10 @@ from helper_methods import (
     read_question_data, read_question_enrich_data, split_to_train_and_test, get_data, enrich_data, get_docs_and_indices,
     calculate_results
 )
-from run_general_model import train_and_evaluate_transformers, cross_validate_and_save_model, predict_with_confidence
+from run_general_model import (
+    train_and_evaluate_transformers, cross_validate_and_save_model, predict_with_confidence,
+    cross_validate_and_save_student_model
+)
 
 MODEL_NAME = 'stella'
 MODEL_FULL_NAME = 'infgrad/stella-base-en-v2'
@@ -52,15 +55,33 @@ def train_model_process(question_path, saved_model_path, override=False):
     cross_validate_and_save_model(MODEL_NAME, MODEL_FULL_NAME, X, y, saved_model_path, n_splits=5)
 
 
-def prediction_process(docs_to_predict, saved_model_path, model=None):
+def train_student_model(question_path, saved_model_path):
+    teacher_model_path = f'{saved_model_path}/{MODEL_NAME}.bin'
+    student_model_path = f'{saved_model_path}/{MODEL_NAME}_student'
+
+    X, question_enrich_dict = get_data(question_path)
+    y = [num for num in range(0, 10) for _ in range(10)]
+    X, y = enrich_data((X, y), question_enrich_dict)
+
+    cross_validate_and_save_student_model(
+        X,
+        y,
+        teacher_model_path,
+        student_model_path,
+        n_splits=5
+    )
+
+
+def prediction_process(docs_to_predict, saved_model_path, student=False, model=None):
     heb_doc2docs = translate_and_enrich(docs_to_predict)
     final_docs_to_predict, indices_dict = get_docs_and_indices(heb_doc2docs)
-
+    model_path = f'{saved_model_path}/{MODEL_NAME}.bin'
+    if student:
+        model_path = f'{saved_model_path}/{MODEL_NAME}_student'
     predictions, confidence_scores, all_confidence_scores = predict_with_confidence(
-        MODEL_NAME,
+        model_path,
         MODEL_FULL_NAME,
         final_docs_to_predict,
-        saved_model_path,
         model
     )
     opt_labels = list(all_confidence_scores[0].keys())

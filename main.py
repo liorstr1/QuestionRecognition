@@ -1,11 +1,11 @@
-from chat_with_gpt.main_gpt_process import ChatWithGPT
+from llms.main_gpt_process import ChatWithGPT
 from helper_methods import get_label2answer
-from main_processes import train_model_process, enrichment_process, prediction_process
+from main_processes import train_model_process, enrichment_process, prediction_process, train_student_model
 
 
 def model_functions():
     question_path = "C:/Users/liors/Desktop/אליאור/questions.txt"
-    saved_model_path = 'C:/Users/liors/Desktop/אליאור/models'
+    saved_model_path = 'D:/pythonProject/QuestionRecognition/models'
     answer_path = "C:/Users/liors/Desktop/אליאור/תשובות נדלן.txt"
 
     enrichment_process(question_path)
@@ -20,6 +20,17 @@ def model_functions():
         print(f'question: {q}')
         print(f'answer: {label2answer[label]}')
         print(f'confidence: {round(conf,3)}')
+
+    train_student_model(question_path, saved_model_path)
+    docs = [
+        'איזה סוג של נכס יענה על הצרכים שלך?',
+        'באילו אזורים  בארץ אתה מתעניין לרכישת נכס?'
+    ]
+    prediction_results = prediction_process(docs, saved_model_path, student=True)
+    for q, (label, conf) in prediction_results.items():
+        print(f'question: {q}')
+        print(f'answer: {label2answer[label]}')
+        print(f'confidence: {round(conf, 3)}')
 
 
 def gpt_function():

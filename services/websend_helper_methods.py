@@ -6,7 +6,7 @@ from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 
-from chat_with_gpt.main_gpt_process import ChatWithGPT
+from llms.main_gpt_process import ChatWithGPT
 from entities import Status, WHATSAPP_WEB, UserData, ClientData, CLIENT_PATH
 from selenium.webdriver.support import expected_conditions as ec
 from selenium import webdriver
@@ -118,6 +118,30 @@ def update_json_struct(json_path, json_struct, next_question, next_message):
         json.dump(json_struct, f, ensure_ascii=False, indent=4)
 
 
+def send_outgoing_message(driver, message_to_send):
+    try:
+        xpath_expression = "//div[contains(@class, 'lexical-rich-text-input')]//div[@contenteditable='true' and " \
+                           "@title='הקלדת הודעה']"
+        message_box = WebDriverWait(driver, 20).until(
+            ec.presence_of_element_located((By.XPATH, xpath_expression))
+        )
+        time.sleep(2)
+        message_box.click()
+        time.sleep(4)
+        message_box.send_keys(message_to_send, Keys.ENTER)
+    except Exception as e:
+        print(e.args)
+
+
+def send_response(driver, response):
+    message_box = WebDriverWait(driver, 20).until(
+        ec.presence_of_element_located((By.XPATH,
+                                        "//div[contains(@class, 'lexical-rich-text-input')]//div["
+                                        "@contenteditable='true' and @title='הקלדת הודעה']"))
+    )
+    message_box.click()
+    time.sleep(2)
+    message_box.send_keys(response, Keys.ENTER)
 
 
 
